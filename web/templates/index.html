@@ -1,0 +1,137 @@
+<!-- web/templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Expense Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Expense Tracker</h1>
+        
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('expenses')">Expenses</button>
+            <button class="tab-button" onclick="showTab('rules')">Categorization Rules</button>
+        </div>
+        
+        <div id="expenses-tab" class="tab-content active">
+        <div class="filters">
+            <input type="date" id="startDate">
+            <input type="date" id="endDate">
+            <select id="category">
+                <option value="">All Categories</option>
+                <option value="Food & Dining">Food & Dining</option>
+                <option value="Food Delivery">Food Delivery</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Mobile & Telecom">Mobile & Telecom</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Other">Other</option>
+            </select>
+            <button onclick="loadExpenses()">Filter</button>
+        </div>
+        
+        <div class="import-section">
+            <h2>Import from CSV</h2>
+            <div class="upload-area">
+                <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                <button onclick="document.getElementById('csvFile').click()" class="upload-btn">
+                    Choose CSV File
+                </button>
+                <span id="fileName" class="file-name"></span>
+                <button onclick="uploadCSV()" id="uploadBtn" class="upload-btn" disabled>
+                    Import Transactions
+                </button>
+            </div>
+            <div id="uploadStatus" class="upload-status"></div>
+            <div id="previewSection" class="preview-section" style="display: none;">
+                <h3>Preview Transactions</h3>
+                <div id="previewCount"></div>
+                <table id="previewTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Vendor</th>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Payment Method</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div id="totalAmount" class="total-amount"></div>
+                <div class="import-actions">
+                    <button onclick="confirmImport()" class="confirm-btn">Confirm Import</button>
+                    <button onclick="cancelImport()" class="cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <canvas id="categoryChart"></canvas>
+        </div>
+        
+        <table id="expenseTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Vendor</th>
+                    <th>Payment Method</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        </div>
+        
+        <div id="rules-tab" class="tab-content">
+            <h2>Categorization Rules</h2>
+            <div class="rules-section">
+                <div class="add-rule-form">
+                    <h3>Add New Rule</h3>
+                    <div class="form-group">
+                        <label for="ruleCategory">Category:</label>
+                        <select id="ruleCategory">
+                            <option value="">Select or type new category...</option>
+                        </select>
+                        <input type="text" id="ruleCategoryCustom" placeholder="Or enter new category" style="margin-top: 5px;">
+                    </div>
+                    <div class="form-group">
+                        <label for="ruleKeyword">Keyword:</label>
+                        <input type="text" id="ruleKeyword" placeholder="e.g., RESTAURANT">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="ruleCaseSensitive"> Case Sensitive
+                        </label>
+                    </div>
+                    <button onclick="addRule()" class="add-btn">Add Rule</button>
+                </div>
+                
+                <div class="rules-list">
+                    <h3>Existing Rules</h3>
+                    <table id="rulesTable">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Keyword</th>
+                                <th>Case Sensitive</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
