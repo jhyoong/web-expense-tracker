@@ -248,9 +248,9 @@ func (h *Handler) parseAmount(amountStr string) (float64, error) {
 		return 0, fmt.Errorf("invalid number format: %v", err)
 	}
 	
-	// Validate reasonable range
-	if amount < 0 {
-		return 0, fmt.Errorf("negative amounts not supported")
+	// Validate reasonable range (allow negative amounts for refunds)
+	if amount < -999999.99 {
+		return 0, fmt.Errorf("amount too small (below -999999.99)")
 	}
 	
 	if amount > 999999.99 {

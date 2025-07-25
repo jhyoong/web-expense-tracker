@@ -375,7 +375,7 @@ function displayExpenses(expenses) {
             <td>${new Date(expense.date).toLocaleDateString()}</td>
             <td>${expense.category}</td>
             <td>${expense.description}</td>
-            <td>$${expense.amount.toFixed(2)}</td>
+            <td>${expense.amount < 0 ? `<span class="negative">-$${Math.abs(expense.amount).toFixed(2)}</span>` : `$${expense.amount.toFixed(2)}`}</td>
             <td>${expense.vendor || '-'}</td>
             <td>${expense.payment_method || '-'}</td>
             <td>
@@ -471,7 +471,7 @@ async function editExpense(id) {
         </select>
     `;
     cells[2].innerHTML = `<input type="text" value="${originalData.description}" class="edit-input">`;
-    cells[3].innerHTML = `<input type="number" value="${originalData.amount}" step="0.01" min="0" class="edit-input">`;
+    cells[3].innerHTML = `<input type="number" value="${originalData.amount}" step="0.01" class="edit-input">`;
     cells[4].innerHTML = `<input type="text" value="${originalData.vendor}" class="edit-input">`;
     cells[5].innerHTML = `
         <select class="edit-input">
