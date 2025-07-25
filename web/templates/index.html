@@ -33,6 +33,60 @@
             <button onclick="loadExpenses()">Filter</button>
         </div>
         
+        <div class="add-expense-section">
+            <h2>Add New Expense</h2>
+            <form id="addExpenseForm" class="expense-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expenseDate">Date:</label>
+                        <input type="date" id="expenseDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expenseCategory">Category:</label>
+                        <select id="expenseCategory" required>
+                            <option value="Food & Dining">Food & Dining</option>
+                            <option value="Food Delivery">Food Delivery</option>
+                            <option value="Transportation">Transportation</option>
+                            <option value="Shopping">Shopping</option>
+                            <option value="Utilities">Utilities</option>
+                            <option value="Mobile & Telecom">Mobile & Telecom</option>
+                            <option value="Healthcare">Healthcare</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expenseAmount">Amount:</label>
+                        <input type="number" id="expenseAmount" step="0.01" min="0" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expenseDescription">Description:</label>
+                        <input type="text" id="expenseDescription" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expenseVendor">Vendor:</label>
+                        <input type="text" id="expenseVendor">
+                    </div>
+                    <div class="form-group">
+                        <label for="expensePaymentMethod">Payment Method:</label>
+                        <select id="expensePaymentMethod">
+                            <option value="Credit Card">Credit Card</option>
+                            <option value="Debit Card">Debit Card</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="add-btn">Add Expense</button>
+                    <button type="reset" class="cancel-btn">Clear</button>
+                </div>
+            </form>
+            <div id="addExpenseStatus" class="form-status"></div>
+        </div>
+        
         <div class="import-section">
             <h2>Import from CSV</h2>
             <div class="upload-area">
@@ -84,10 +138,13 @@
                     <th>Amount</th>
                     <th>Vendor</th>
                     <th>Payment Method</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
+        
+        <div id="pagination" class="pagination"></div>
         </div>
         
         <div id="rules-tab" class="tab-content">

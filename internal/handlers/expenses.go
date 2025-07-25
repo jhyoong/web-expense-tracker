@@ -5,104 +5,83 @@ import (
     "encoding/json"
     "expense-tracker/internal/database"
     "expense-tracker/internal/models"
+    "expense-tracker/internal/repository"
     "net/http"
+    "strconv"
+    "time"
+    
+    "github.com/gorilla/mux"
 )
 
 type Handler struct {
-    db *database.DB
+    db         *database.DB
+    expenseRepo repository.ExpenseRepository
 }
 
 func New(db *database.DB) *Handler {
-    return &Handler{db: db}
+    return &Handler{
+        db:         db,
+        expenseRepo: repository.NewExpenseRepository(db),
+    }
 }
 
 func (h *Handler) GetExpenses(w http.ResponseWriter, r *http.Request) {
-    startDate := r.URL.Query().Get("start_date")
-    endDate := r.URL.Query().Get("end_date")
-    category := r.URL.Query().Get("category")
+    // Parse filters
+    var filter models.ExpenseFilter
     
-    query := `
-        SELECT id, date, category, description, amount, vendor, payment_method, created_at, updated_at
-        FROM expenses
-        WHERE 1=1
-    `
-    args := []interface{}{}
-    
-    if startDate != "" {
-        query += " AND date >= ?"
-        args = append(args, startDate)
-    }
-    if endDate != "" {
-        query += " AND date <= ?"
-        args = append(args, endDate)
-    }
-    if category != "" {
-        query += " AND category = ?"
-        args = append(args, category)
+    if startDateStr := r.URL.Query().Get("start_date"); startDateStr != "" {
+        if parsedDate, err := time.Parse("2006-01-02", startDateStr); err == nil {
+            filter.StartDate = parsedDate
+        }
     }
     
-    query += " ORDER BY date DESC"
+    if endDateStr := r.URL.Query().Get("end_date"); endDateStr != "" {
+        if parsedDate, err := time.Parse("2006-01-02", endDateStr); err == nil {
+            filter.EndDate = parsedDate
+        }
+    }
     
-    rows, err := h.db.Query(query, args...)
+    filter.Category = r.URL.Query().Get("category")
+    
+    // Parse pagination
+    page := 1
+    if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+        if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+            page = p
+        }
+    }
+    
+    limit := 20 // Default page size
+    if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+        if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+            limit = l
+        }
+    }
+    
+    expenses, pagination, err := h.expenseRepo.GetAll(filter, page, limit)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    defer rows.Close()
     
-    var expenses []models.Expense
-    for rows.Next() {
-        var e models.Expense
-        err := rows.Scan(&e.ID, &e.Date, &e.Category, &e.Description, 
-                        &e.Amount, &e.Vendor, &e.PaymentMethod, &e.CreatedAt, &e.UpdatedAt)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
-        expenses = append(expenses, e)
+    response := map[string]interface{}{
+        "expenses":   expenses,
+        "pagination": pagination,
     }
     
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(expenses)
+    json.NewEncoder(w).Encode(response)
 }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
     startDate := r.URL.Query().Get("start_date")
     endDate := r.URL.Query().Get("end_date")
     
-    // Category breakdown
-    query := `
-        SELECT category, SUM(amount) as total
-        FROM expenses
-        WHERE date BETWEEN ? AND ?
-        GROUP BY category
-        ORDER BY total DESC
-    `
-    
-    rows, err := h.db.Query(query, startDate, endDate)
+    stats, err := h.expenseRepo.GetStats(startDate, endDate)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    defer rows.Close()
-    
-    stats := make(map[string]interface{})
-    categories := make(map[string]float64)
-    
-    var totalAmount float64
-    for rows.Next() {
-        var category string
-        var amount float64
-        if err := rows.Scan(&category, &amount); err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
-        categories[category] = amount
-        totalAmount += amount
-    }
-    
-    stats["categories"] = categories
-    stats["total"] = totalAmount
     
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(stats)
@@ -115,25 +94,11 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    query := `
-        INSERT INTO expenses (date, category, description, amount, vendor, payment_method, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `
-    
-    result, err := h.db.Exec(query, expense.Date, expense.Category, expense.Description, 
-                           expense.Amount, expense.Vendor, expense.PaymentMethod)
-    if err != nil {
+    if err := h.expenseRepo.Create(&expense); err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
     
-    id, err := result.LastInsertId()
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    
-    expense.ID = int(id)
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(expense)
@@ -156,52 +121,15 @@ func (h *Handler) ConfirmImport(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    // Begin transaction for bulk insert
-    tx, err := h.db.Begin()
+    savedExpenses, err := h.expenseRepo.BulkInsert(expenses)
     if err != nil {
-        http.Error(w, "Failed to begin transaction: "+err.Error(), http.StatusInternalServerError)
+        http.Error(w, "Failed to import expenses: "+err.Error(), http.StatusInternalServerError)
         return
     }
-    defer tx.Rollback()
     
-    query := `
-        INSERT INTO expenses (date, category, description, amount, vendor, payment_method, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `
-    
-    stmt, err := tx.Prepare(query)
-    if err != nil {
-        http.Error(w, "Failed to prepare statement: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
-    defer stmt.Close()
-    
-    var savedExpenses []models.Expense
     var totalAmount float64
-    
-    for _, expense := range expenses {
-        result, err := stmt.Exec(expense.Date, expense.Category, expense.Description, 
-                               expense.Amount, expense.Vendor, expense.PaymentMethod)
-        if err != nil {
-            http.Error(w, "Failed to insert expense: "+err.Error(), http.StatusInternalServerError)
-            return
-        }
-        
-        id, err := result.LastInsertId()
-        if err != nil {
-            http.Error(w, "Failed to get inserted ID: "+err.Error(), http.StatusInternalServerError)
-            return
-        }
-        
-        expense.ID = int(id)
-        savedExpenses = append(savedExpenses, expense)
+    for _, expense := range savedExpenses {
         totalAmount += expense.Amount
-    }
-    
-    // Commit transaction
-    if err := tx.Commit(); err != nil {
-        http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
-        return
     }
     
     response := map[string]interface{}{
@@ -214,6 +142,64 @@ func (h *Handler) ConfirmImport(w http.ResponseWriter, r *http.Request) {
     
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    idStr := vars["id"]
+    
+    id, err := strconv.Atoi(idStr)
+    if err != nil {
+        http.Error(w, "Invalid expense ID", http.StatusBadRequest)
+        return
+    }
+    
+    var expense models.Expense
+    if err := json.NewDecoder(r.Body).Decode(&expense); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    if err := h.expenseRepo.Update(id, &expense); err != nil {
+        if err == repository.ErrExpenseNotFound {
+            http.Error(w, "Expense not found", http.StatusNotFound)
+            return
+        }
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    // Return updated expense
+    updatedExpense, err := h.expenseRepo.GetByID(id)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(updatedExpense)
+}
+
+func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    idStr := vars["id"]
+    
+    id, err := strconv.Atoi(idStr)
+    if err != nil {
+        http.Error(w, "Invalid expense ID", http.StatusBadRequest)
+        return
+    }
+    
+    if err := h.expenseRepo.Delete(id); err != nil {
+        if err == repository.ErrExpenseNotFound {
+            http.Error(w, "Expense not found", http.StatusNotFound)
+            return
+        }
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) IndexPage(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ package main
 import (
 	"expense-tracker/internal/database"
 	"expense-tracker/internal/handlers"
+	"expense-tracker/internal/middleware"
 	"log"
 	"net/http"
 
@@ -18,12 +19,20 @@ func main() {
 	defer db.Close()
 
 	h := handlers.New(db)
+	csrfStore := middleware.NewCSRFTokenStore()
 	r := mux.NewRouter()
 
-	// API routes
+	// CSRF token endpoint (no CSRF protection needed for this)
+	r.HandleFunc("/api/csrf-token", middleware.CSRFTokenHandler(csrfStore)).Methods("GET")
+
+	// API routes with CSRF protection
 	api := r.PathPrefix("/api").Subrouter()
+	api.Use(middleware.CSRFMiddleware(csrfStore))
+	
 	api.HandleFunc("/expenses", h.GetExpenses).Methods("GET")
 	api.HandleFunc("/expenses", h.CreateExpense).Methods("POST")
+	api.HandleFunc("/expenses/{id}", h.UpdateExpense).Methods("PUT")
+	api.HandleFunc("/expenses/{id}", h.DeleteExpense).Methods("DELETE")
 	api.HandleFunc("/expenses/stats", h.GetStats).Methods("GET")
 	api.HandleFunc("/import/csv", h.ImportFromCSV).Methods("POST")
 	api.HandleFunc("/import/confirm", h.ConfirmImport).Methods("POST")
@@ -35,7 +44,7 @@ func main() {
 	api.HandleFunc("/categorization-rules/{id}", h.DeleteCategoryRule).Methods("DELETE")
 	api.HandleFunc("/categories", h.GetCategories).Methods("GET")
 
-	// Static files
+	// Static files (no CSRF protection needed)
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static/"))))
 	r.HandleFunc("/", h.IndexPage).Methods("GET")
 

@@ -1,12 +1,58 @@
 let expenseChart;
 let previewData = null;
+let currentPage = 1;
+let totalPages = 1;
+let csrfToken = null;
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    await fetchCSRFToken();
     loadExpenses();
     setupFileUpload();
+    setupAddExpenseForm();
     loadCategoryRules();
     loadDynamicCategories();
 });
+
+async function fetchCSRFToken() {
+    try {
+        const response = await fetch('/api/csrf-token');
+        const data = await response.json();
+        csrfToken = data.csrf_token;
+    } catch (error) {
+        console.error('Failed to fetch CSRF token:', error);
+    }
+}
+
+async function apiRequest(url, options = {}) {
+    // Ensure we have a CSRF token for non-GET requests
+    if (options.method && options.method !== 'GET' && !csrfToken) {
+        await fetchCSRFToken();
+    }
+    
+    // Add CSRF token to headers for non-GET requests
+    if (options.method && options.method !== 'GET' && csrfToken) {
+        options.headers = {
+            ...options.headers,
+            'X-CSRF-Token': csrfToken
+        };
+    }
+    
+    const response = await fetch(url, options);
+    
+    // If we get a 403, it might be due to an invalid/expired CSRF token
+    if (response.status === 403) {
+        await fetchCSRFToken();
+        if (options.method && options.method !== 'GET' && csrfToken) {
+            options.headers = {
+                ...options.headers,
+                'X-CSRF-Token': csrfToken
+            };
+        }
+        return fetch(url, options);
+    }
+    
+    return response;
+}
 
 function setupFileUpload() {
     const fileInput = document.getElementById('csvFile');
@@ -23,6 +69,74 @@ function setupFileUpload() {
             uploadBtn.disabled = true;
         }
     });
+}
+
+function setupAddExpenseForm() {
+    const form = document.getElementById('addExpenseForm');
+    const dateInput = document.getElementById('expenseDate');
+    
+    // Set default date to today
+    dateInput.value = new Date().toISOString().split('T')[0];
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        await addExpense();
+    });
+}
+
+async function addExpense() {
+    const form = document.getElementById('addExpenseForm');
+    const status = document.getElementById('addExpenseStatus');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    
+    // Get form data
+    const expenseData = {
+        date: document.getElementById('expenseDate').value,
+        category: document.getElementById('expenseCategory').value,
+        description: document.getElementById('expenseDescription').value,
+        amount: parseFloat(document.getElementById('expenseAmount').value),
+        vendor: document.getElementById('expenseVendor').value || '',
+        payment_method: document.getElementById('expensePaymentMethod').value
+    };
+    
+    // Validate required fields
+    if (!expenseData.date || !expenseData.category || !expenseData.description || !expenseData.amount) {
+        status.innerHTML = '<div class="error">Please fill in all required fields</div>';
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    status.innerHTML = '<div class="loading">Adding expense...</div>';
+    
+    try {
+        const response = await apiRequest('/api/expenses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(expenseData)
+        });
+        
+        if (response.ok) {
+            const newExpense = await response.json();
+            status.innerHTML = '<div class="success">Expense added successfully!</div>';
+            form.reset();
+            document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+            loadExpenses(); // Reload the expenses table
+        } else {
+            const error = await response.text();
+            throw new Error(error);
+        }
+    } catch (error) {
+        status.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+        console.error('Add expense error:', error);
+    } finally {
+        submitBtn.disabled = false;
+        // Clear status after 5 seconds
+        setTimeout(() => {
+            status.innerHTML = '';
+        }, 5000);
+    }
 }
 
 async function uploadCSV() {
@@ -42,7 +156,7 @@ async function uploadCSV() {
     formData.append('csv', fileInput.files[0]);
     
     try {
-        const response = await fetch('/api/import/csv', {
+        const response = await apiRequest('/api/import/csv', {
             method: 'POST',
             body: formData
         });
@@ -160,7 +274,7 @@ async function confirmImport() {
     
     try {
         // Send the edited preview data to the backend
-        const response = await fetch('/api/import/confirm', {
+        const response = await apiRequest('/api/import/confirm', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -206,7 +320,7 @@ function cancelImport() {
     previewData = null;
 }
 
-async function loadExpenses() {
+async function loadExpenses(page = 1) {
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     const category = document.getElementById('category').value;
@@ -215,12 +329,23 @@ async function loadExpenses() {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     if (category) params.append('category', category);
+    params.append('page', page);
+    params.append('limit', '20');
     
     try {
         // Load expenses
         const expensesResponse = await fetch(`/api/expenses?${params}`);
-        const expenses = await expensesResponse.json();
-        displayExpenses(expenses);
+        const data = await expensesResponse.json();
+        
+        currentPage = page;
+        if (data.pagination) {
+            totalPages = Math.ceil(data.pagination.total / data.pagination.limit);
+            displayExpenses(data.expenses);
+            displayPagination(data.pagination);
+        } else {
+            // Fallback for old format
+            displayExpenses(data);
+        }
         
         // Load stats if date range is provided
         if (startDate && endDate) {
@@ -237,6 +362,13 @@ function displayExpenses(expenses) {
     const tbody = document.querySelector('#expenseTable tbody');
     tbody.innerHTML = '';
     
+    if (!expenses || expenses.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="8" style="text-align: center; color: #666;">No expenses found</td>';
+        tbody.appendChild(row);
+        return;
+    }
+    
     expenses.forEach(expense => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -246,9 +378,197 @@ function displayExpenses(expenses) {
             <td>$${expense.amount.toFixed(2)}</td>
             <td>${expense.vendor || '-'}</td>
             <td>${expense.payment_method || '-'}</td>
+            <td>
+                <button class="edit-btn" onclick="editExpense(${expense.id})">Edit</button>
+                <button class="delete-btn" onclick="deleteExpense(${expense.id})">Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
+}
+
+function displayPagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    if (!pagination || pagination.total === 0) {
+        paginationDiv.innerHTML = '';
+        return;
+    }
+    
+    const totalPages = Math.ceil(pagination.total / pagination.limit);
+    let paginationHTML = `
+        <div class="pagination-info">
+            Showing ${Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} to 
+            ${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total} expenses
+        </div>
+        <div class="pagination-controls">
+    `;
+    
+    // Previous button
+    if (pagination.has_previous) {
+        paginationHTML += `<button onclick="loadExpenses(${pagination.page - 1})" class="page-btn">Previous</button>`;
+    }
+    
+    // Page numbers
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(totalPages, pagination.page + 2);
+    
+    if (startPage > 1) {
+        paginationHTML += `<button onclick="loadExpenses(1)" class="page-btn">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += `<span class="page-ellipsis">...</span>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === pagination.page ? 'active' : '';
+        paginationHTML += `<button onclick="loadExpenses(${i})" class="page-btn ${activeClass}">${i}</button>`;
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `<span class="page-ellipsis">...</span>`;
+        }
+        paginationHTML += `<button onclick="loadExpenses(${totalPages})" class="page-btn">${totalPages}</button>`;
+    }
+    
+    // Next button
+    if (pagination.has_next) {
+        paginationHTML += `<button onclick="loadExpenses(${pagination.page + 1})" class="page-btn">Next</button>`;
+    }
+    
+    paginationHTML += '</div>';
+    paginationDiv.innerHTML = paginationHTML;
+}
+
+async function editExpense(id) {
+    const row = document.querySelector(`tr:has(button[onclick="editExpense(${id})"])`);
+    if (!row) return;
+    
+    const cells = row.querySelectorAll('td');
+    const originalData = {
+        date: cells[0].textContent,
+        category: cells[1].textContent,
+        description: cells[2].textContent,
+        amount: cells[3].textContent.replace('$', ''),
+        vendor: cells[4].textContent === '-' ? '' : cells[4].textContent,
+        payment_method: cells[5].textContent === '-' ? '' : cells[5].textContent
+    };
+    
+    // Convert to edit mode
+    const dateValue = new Date(originalData.date).toISOString().split('T')[0];
+    
+    cells[0].innerHTML = `<input type="date" value="${dateValue}" class="edit-input">`;
+    cells[1].innerHTML = `
+        <select class="edit-input">
+            <option value="Food & Dining" ${originalData.category === 'Food & Dining' ? 'selected' : ''}>Food & Dining</option>
+            <option value="Food Delivery" ${originalData.category === 'Food Delivery' ? 'selected' : ''}>Food Delivery</option>
+            <option value="Transportation" ${originalData.category === 'Transportation' ? 'selected' : ''}>Transportation</option>
+            <option value="Shopping" ${originalData.category === 'Shopping' ? 'selected' : ''}>Shopping</option>
+            <option value="Utilities" ${originalData.category === 'Utilities' ? 'selected' : ''}>Utilities</option>
+            <option value="Mobile & Telecom" ${originalData.category === 'Mobile & Telecom' ? 'selected' : ''}>Mobile & Telecom</option>
+            <option value="Healthcare" ${originalData.category === 'Healthcare' ? 'selected' : ''}>Healthcare</option>
+            <option value="Other" ${originalData.category === 'Other' ? 'selected' : ''}>Other</option>
+        </select>
+    `;
+    cells[2].innerHTML = `<input type="text" value="${originalData.description}" class="edit-input">`;
+    cells[3].innerHTML = `<input type="number" value="${originalData.amount}" step="0.01" min="0" class="edit-input">`;
+    cells[4].innerHTML = `<input type="text" value="${originalData.vendor}" class="edit-input">`;
+    cells[5].innerHTML = `
+        <select class="edit-input">
+            <option value="Credit Card" ${originalData.payment_method === 'Credit Card' ? 'selected' : ''}>Credit Card</option>
+            <option value="Debit Card" ${originalData.payment_method === 'Debit Card' ? 'selected' : ''}>Debit Card</option>
+            <option value="Cash" ${originalData.payment_method === 'Cash' ? 'selected' : ''}>Cash</option>
+            <option value="Bank Transfer" ${originalData.payment_method === 'Bank Transfer' ? 'selected' : ''}>Bank Transfer</option>
+            <option value="Other" ${originalData.payment_method === 'Other' ? 'selected' : ''}>Other</option>
+        </select>
+    `;
+    cells[6].innerHTML = `
+        <button class="save-btn" onclick="saveExpense(${id})">Save</button>
+        <button class="cancel-btn" onclick="cancelEdit(${id}, '${JSON.stringify(originalData).replace(/'/g, "\\'")}')">Cancel</button>
+    `;
+}
+
+async function saveExpense(id) {
+    const row = document.querySelector(`tr:has(button[onclick="saveExpense(${id})"])`);
+    if (!row) return;
+    
+    const cells = row.querySelectorAll('td');
+    const expenseData = {
+        date: cells[0].querySelector('input').value,
+        category: cells[1].querySelector('select').value,
+        description: cells[2].querySelector('input').value,
+        amount: parseFloat(cells[3].querySelector('input').value),
+        vendor: cells[4].querySelector('input').value || '',
+        payment_method: cells[5].querySelector('select').value
+    };
+    
+    // Validate required fields
+    if (!expenseData.date || !expenseData.category || !expenseData.description || !expenseData.amount) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/api/expenses/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(expenseData)
+        });
+        
+        if (response.ok) {
+            loadExpenses(currentPage); // Reload the current page
+        } else {
+            const error = await response.text();
+            alert(`Error updating expense: ${error}`);
+        }
+    } catch (error) {
+        console.error('Update expense error:', error);
+        alert(`Error updating expense: ${error.message}`);
+    }
+}
+
+function cancelEdit(id, originalDataStr) {
+    const originalData = JSON.parse(originalDataStr);
+    const row = document.querySelector(`tr:has(button[onclick*="cancelEdit(${id}"])`);
+    if (!row) return;
+    
+    const cells = row.querySelectorAll('td');
+    
+    // Restore original values
+    cells[0].textContent = originalData.date;
+    cells[1].textContent = originalData.category;
+    cells[2].textContent = originalData.description;
+    cells[3].textContent = '$' + parseFloat(originalData.amount).toFixed(2);
+    cells[4].textContent = originalData.vendor || '-';
+    cells[5].textContent = originalData.payment_method || '-';
+    cells[6].innerHTML = `
+        <button class="edit-btn" onclick="editExpense(${id})">Edit</button>
+        <button class="delete-btn" onclick="deleteExpense(${id})">Delete</button>
+    `;
+}
+
+async function deleteExpense(id) {
+    if (!confirm('Are you sure you want to delete this expense?')) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/api/expenses/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadExpenses(currentPage); // Reload current page
+        } else {
+            const error = await response.text();
+            alert(`Error deleting expense: ${error}`);
+        }
+    } catch (error) {
+        console.error('Delete expense error:', error);
+        alert(`Error deleting expense: ${error.message}`);
+    }
 }
 
 function displayChart(stats) {
@@ -500,7 +820,7 @@ async function addRule() {
     }
     
     try {
-        const response = await fetch('/api/categorization-rules', {
+        const response = await apiRequest('/api/categorization-rules', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -540,7 +860,7 @@ async function deleteRule(ruleId) {
     }
     
     try {
-        const response = await fetch(`/api/categorization-rules/${ruleId}`, {
+        const response = await apiRequest(`/api/categorization-rules/${ruleId}`, {
             method: 'DELETE'
         });
         
