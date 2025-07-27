@@ -1,4 +1,5 @@
 let expenseChart;
+let monthlyChart;
 let previewData = null;
 let currentPage = 1;
 let totalPages = 1;
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupAddExpenseForm();
     loadCategoryRules();
     loadDynamicCategories();
+    setupChartViewToggle();
 });
 
 async function fetchCSRFToken() {
@@ -371,9 +373,15 @@ async function loadExpenses(page = 1) {
         
         // Load stats if date range is provided
         if (startDate && endDate) {
-            const statsResponse = await fetch(`/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`);
-            const stats = await statsResponse.json();
-            displayChart(stats);
+            const selectedView = document.querySelector('input[name="chartView"]:checked').value;
+            
+            if (selectedView === 'category') {
+                const statsResponse = await fetch(`/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`);
+                const stats = await statsResponse.json();
+                displayChart(stats);
+            } else if (selectedView === 'monthly') {
+                loadMonthlyStats();
+            }
         }
     } catch (error) {
         console.error('Error loading expenses:', error);
@@ -634,6 +642,156 @@ function displayChart(stats) {
     });
 }
 
+async function loadMonthlyStats() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    if (!startDate || !endDate) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/expenses/monthly-stats?start_date=${startDate}&end_date=${endDate}`);
+        const stats = await response.json();
+        displayMonthlyChart(stats);
+    } catch (error) {
+        console.error('Error loading monthly stats:', error);
+    }
+}
+
+function displayMonthlyChart(stats) {
+    const ctx = document.getElementById('monthlyChart').getContext('2d');
+    
+    if (monthlyChart) {
+        monthlyChart.destroy();
+    }
+    
+    const monthlyData = stats.monthly || [];
+    const categories = stats.categories || [];
+    
+    // Create labels for months
+    const labels = monthlyData.map(item => {
+        const [year, month] = item.month.split('-');
+        const date = new Date(year, month - 1);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+    });
+    
+    // Color palette for categories
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+        '#9966FF', '#FF9F40', '#FF6B6B', '#4ECDC4',
+        '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'
+    ];
+    
+    // Create datasets for each category
+    const datasets = categories.map((category, index) => ({
+        label: category,
+        data: monthlyData.map(item => {
+            const categoryData = item.categories || {};
+            return categoryData[category] || 0;
+        }),
+        backgroundColor: colors[index % colors.length],
+        borderColor: colors[index % colors.length],
+        borderWidth: 1
+    }));
+    
+    monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                },
+                title: {
+                    display: true,
+                    text: `Total: $${stats.total.toFixed(2)}`
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            return `${label}: $${value.toFixed(2)}`;
+                        },
+                        footer: function(tooltipItems) {
+                            let total = 0;
+                            tooltipItems.forEach(item => {
+                                total += item.parsed.y;
+                            });
+                            return `Month Total: $${total.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function setupChartViewToggle() {
+    const radioButtons = document.querySelectorAll('input[name="chartView"]');
+    
+    radioButtons.forEach(radio => {
+        radio.addEventListener('change', function() {
+            const categoryCanvas = document.getElementById('categoryChart');
+            const monthlyCanvas = document.getElementById('monthlyChart');
+            
+            if (this.value === 'category') {
+                categoryCanvas.style.display = 'block';
+                monthlyCanvas.style.display = 'none';
+                
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                if (startDate && endDate) {
+                    loadCategoryStats();
+                }
+            } else if (this.value === 'monthly') {
+                categoryCanvas.style.display = 'none';
+                monthlyCanvas.style.display = 'block';
+                
+                loadMonthlyStats();
+            }
+        });
+    });
+}
+
+async function loadCategoryStats() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    if (!startDate || !endDate) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`);
+        const stats = await response.json();
+        displayChart(stats);
+    } catch (error) {
+        console.error('Error loading category stats:', error);
+    }
+}
+
 // Date validation function for YYYY/MM/DD format
 function validateDate(dateStr) {
     const datePattern = /^(\d{4})\/(\d{2})\/(\d{2})$/;
@@ -777,7 +935,7 @@ function cancelEdit(index) {
 }
 
 // Tab Management
-function showTab(tabName) {
+function showTab(tabName, event) {
     // Hide all tab contents
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -790,7 +948,9 @@ function showTab(tabName) {
     
     // Show selected tab and activate button
     document.getElementById(tabName + '-tab').classList.add('active');
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     // Load data for the active tab
     if (tabName === 'rules') {

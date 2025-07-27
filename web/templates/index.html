@@ -11,8 +11,8 @@
         <h1>Expense Tracker</h1>
         
         <div class="tabs">
-            <button class="tab-button active" onclick="showTab('expenses')">Expenses</button>
-            <button class="tab-button" onclick="showTab('rules')">Categorization Rules</button>
+            <button class="tab-button active" onclick="showTab('expenses', event)">Expenses</button>
+            <button class="tab-button" onclick="showTab('rules', event)">Categorization Rules</button>
         </div>
         
         <div id="expenses-tab" class="tab-content active">
@@ -126,7 +126,20 @@
         </div>
         
         <div class="stats">
-            <canvas id="categoryChart"></canvas>
+            <div class="chart-view-toggle">
+                <label>
+                    <input type="radio" name="chartView" value="category" checked>
+                    Category Breakdown
+                </label>
+                <label>
+                    <input type="radio" name="chartView" value="monthly">
+                    Monthly Expenses
+                </label>
+            </div>
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+                <canvas id="monthlyChart" style="display: none;" height="400"></canvas>
+            </div>
         </div>
         
         <table id="expenseTable">

@@ -34,6 +34,7 @@ func main() {
 	api.HandleFunc("/expenses/{id}", h.UpdateExpense).Methods("PUT")
 	api.HandleFunc("/expenses/{id}", h.DeleteExpense).Methods("DELETE")
 	api.HandleFunc("/expenses/stats", h.GetStats).Methods("GET")
+	api.HandleFunc("/expenses/monthly-stats", h.GetMonthlyStats).Methods("GET")
 	api.HandleFunc("/import/csv", h.ImportFromCSV).Methods("POST")
 	api.HandleFunc("/import/confirm", h.ConfirmImport).Methods("POST")
 	

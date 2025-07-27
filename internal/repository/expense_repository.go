@@ -12,6 +12,7 @@ type ExpenseRepository interface {
     Update(id int, expense *models.Expense) error
     Delete(id int) error
     GetStats(startDate, endDate string) (map[string]interface{}, error)
+    GetMonthlyStats(startDate, endDate string) (map[string]interface{}, error)
     BulkInsert(expenses []models.Expense) ([]models.Expense, error)
 }
 
@@ -221,6 +222,81 @@ func (r *expenseRepository) GetStats(startDate, endDate string) (map[string]inte
     }
     
     stats["categories"] = categories
+    stats["total"] = totalAmount
+    
+    return stats, nil
+}
+
+func (r *expenseRepository) GetMonthlyStats(startDate, endDate string) (map[string]interface{}, error) {
+    query := `
+        SELECT strftime('%Y-%m', date) as month, category, SUM(amount) as total
+        FROM expenses
+        WHERE date BETWEEN ? AND ?
+        GROUP BY strftime('%Y-%m', date), category
+        ORDER BY month ASC, category ASC
+    `
+    
+    rows, err := r.db.Query(query, startDate, endDate)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    
+    stats := make(map[string]interface{})
+    monthlyData := make(map[string]map[string]float64)
+    allCategories := make(map[string]bool)
+    
+    var totalAmount float64
+    for rows.Next() {
+        var month, category string
+        var amount float64
+        if err := rows.Scan(&month, &category, &amount); err != nil {
+            return nil, err
+        }
+        
+        if monthlyData[month] == nil {
+            monthlyData[month] = make(map[string]float64)
+        }
+        monthlyData[month][category] = amount
+        allCategories[category] = true
+        totalAmount += amount
+    }
+    
+    // Convert to array format for frontend
+    monthlyArray := make([]map[string]interface{}, 0)
+    for month, categories := range monthlyData {
+        monthData := map[string]interface{}{
+            "month":      month,
+            "categories": categories,
+        }
+        
+        // Calculate monthly total
+        var monthTotal float64
+        for _, amount := range categories {
+            monthTotal += amount
+        }
+        monthData["total"] = monthTotal
+        
+        monthlyArray = append(monthlyArray, monthData)
+    }
+    
+    // Sort by month
+    for i := 0; i < len(monthlyArray)-1; i++ {
+        for j := i + 1; j < len(monthlyArray); j++ {
+            if monthlyArray[i]["month"].(string) > monthlyArray[j]["month"].(string) {
+                monthlyArray[i], monthlyArray[j] = monthlyArray[j], monthlyArray[i]
+            }
+        }
+    }
+    
+    // Get list of all categories for consistent ordering
+    categoryList := make([]string, 0, len(allCategories))
+    for category := range allCategories {
+        categoryList = append(categoryList, category)
+    }
+    
+    stats["monthly"] = monthlyArray
+    stats["categories"] = categoryList
     stats["total"] = totalAmount
     
     return stats, nil

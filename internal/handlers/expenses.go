@@ -87,6 +87,20 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(stats)
 }
 
+func (h *Handler) GetMonthlyStats(w http.ResponseWriter, r *http.Request) {
+    startDate := r.URL.Query().Get("start_date")
+    endDate := r.URL.Query().Get("end_date")
+    
+    stats, err := h.expenseRepo.GetMonthlyStats(startDate, endDate)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(stats)
+}
+
 func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
     var expense models.Expense
     if err := json.NewDecoder(r.Body).Decode(&expense); err != nil {
