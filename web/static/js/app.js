@@ -6,6 +6,7 @@ let csrfToken = null;
 
 document.addEventListener('DOMContentLoaded', async function() {
     await fetchCSRFToken();
+    setDefaultDateRange();
     loadExpenses();
     setupFileUpload();
     setupAddExpenseForm();
@@ -21,6 +22,20 @@ async function fetchCSRFToken() {
     } catch (error) {
         console.error('Failed to fetch CSRF token:', error);
     }
+}
+
+function setDefaultDateRange() {
+    const today = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(today.getMonth() - 6);
+    
+    // Format dates as YYYY-MM-DD for HTML date inputs
+    const formatDate = (date) => {
+        return date.toISOString().split('T')[0];
+    };
+    
+    document.getElementById('startDate').value = formatDate(sixMonthsAgo);
+    document.getElementById('endDate').value = formatDate(today);
 }
 
 async function apiRequest(url, options = {}) {

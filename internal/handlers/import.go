@@ -210,25 +210,34 @@ func (h *Handler) getFieldValue(record []string, headerMap map[string]int, field
 }
 
 func (h *Handler) parseDate(dateStr string) (time.Time, error) {
-	// Try common date formats
+	// Try common date formats, ordered from most specific to least specific
+	// Unambiguous formats first, then prioritize DD/MM/YYYY over MM/DD/YYYY
 	formats := []string{
-		"2006-01-02",           // YYYY-MM-DD
-		"01/02/2006",           // MM/DD/YYYY
-		"02/01/2006",           // DD/MM/YYYY
-		"2006/01/02",           // YYYY/MM/DD
-		"01-02-2006",           // MM-DD-YYYY
-		"02-01-2006",           // DD-MM-YYYY
+		"2006-01-02",           // YYYY-MM-DD (ISO standard - unambiguous)
+		"2006/01/02",           // YYYY/MM/DD (year-first - unambiguous)
+		"2006.01.02",           // YYYY.MM.DD (year-first dot - unambiguous)
+		"02/01/2006",           // DD/MM/YYYY (European format - prioritized)
+		"02-01-2006",           // DD-MM-YYYY (European dash)
+		"02.01.2006",           // DD.MM.YYYY (European dot)
+		"01/02/2006",           // MM/DD/YYYY (US format)
+		"01-02-2006",           // MM-DD-YYYY (US dash)
+		"01.02.2006",           // MM.DD.YYYY (US dot)
 		"2006-01-02 15:04:05",  // YYYY-MM-DD HH:MM:SS
+		"2006/01/02 15:04:05",  // YYYY/MM/DD HH:MM:SS
+		"02/01/2006 15:04:05",  // DD/MM/YYYY HH:MM:SS
 		"01/02/2006 15:04:05",  // MM/DD/YYYY HH:MM:SS
 	}
 	
+	var attemptedFormats []string
 	for _, format := range formats {
+		attemptedFormats = append(attemptedFormats, format)
 		if date, err := time.Parse(format, dateStr); err == nil {
+			log.Printf("Successfully parsed date '%s' using format '%s'", dateStr, format)
 			return date, nil
 		}
 	}
 	
-	return time.Time{}, fmt.Errorf("unsupported date format")
+	return time.Time{}, fmt.Errorf("unsupported date format. Tried formats: %s", strings.Join(attemptedFormats, ", "))
 }
 
 func (h *Handler) parseAmount(amountStr string) (float64, error) {
