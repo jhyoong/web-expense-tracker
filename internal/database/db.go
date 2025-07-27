@@ -26,9 +26,16 @@ func New(dataSourceName string) (*DB, error) {
 		return nil, err
 	}
 
-	// Seed initial categorization rules
-	if _, err := db.Exec(seedCategoryRulesSQL); err != nil {
+	// Seed initial categorization rules only if table is empty
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM categorization_rules").Scan(&count); err != nil {
 		return nil, err
+	}
+	
+	if count == 0 {
+		if _, err := db.Exec(seedCategoryRulesSQL); err != nil {
+			return nil, err
+		}
 	}
 
 	return &DB{db}, nil

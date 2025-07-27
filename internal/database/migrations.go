@@ -27,6 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_categorization_rules_category ON categorization_rules(category);
 CREATE INDEX IF NOT EXISTS idx_categorization_rules_keyword ON categorization_rules(keyword);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categorization_rules_unique ON categorization_rules(category, keyword, case_sensitive);
 `
 
 const seedCategoryRulesSQL = `
