@@ -24,6 +24,13 @@ async function fetchCSRFToken() {
     }
 }
 
+function formatDateYYYYMMDD(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}/${month}/${day}`;
+}
+
 function setDefaultDateRange() {
     const today = new Date();
     const sixMonthsAgo = new Date();
@@ -223,9 +230,9 @@ function displayPreview(result) {
             `<span class="negative">-$${Math.abs(expense.amount).toFixed(2)}</span>` :
             `$${expense.amount.toFixed(2)}`;
         
-        // Format date to DD/MM/YYYY
+        // Format date to YYYY/MM/DD
         const date = new Date(expense.date);
-        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+        const formattedDate = formatDateYYYYMMDD(date);
             
         row.innerHTML = `
             <td class="date-cell">
@@ -387,7 +394,7 @@ function displayExpenses(expenses) {
     expenses.forEach(expense => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${new Date(expense.date).toLocaleDateString()}</td>
+            <td>${formatDateYYYYMMDD(new Date(expense.date))}</td>
             <td>${expense.category}</td>
             <td>${expense.description}</td>
             <td>${expense.amount < 0 ? `<span class="negative">-$${Math.abs(expense.amount).toFixed(2)}</span>` : `$${expense.amount.toFixed(2)}`}</td>
@@ -627,18 +634,18 @@ function displayChart(stats) {
     });
 }
 
-// Date validation function for DD/MM/YYYY format
+// Date validation function for YYYY/MM/DD format
 function validateDate(dateStr) {
-    const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const datePattern = /^(\d{4})\/(\d{2})\/(\d{2})$/;
     const match = dateStr.match(datePattern);
     
     if (!match) {
-        return { valid: false, error: 'Date must be in DD/MM/YYYY format' };
+        return { valid: false, error: 'Date must be in YYYY/MM/DD format' };
     }
     
-    const day = parseInt(match[1], 10);
+    const year = parseInt(match[1], 10);
     const month = parseInt(match[2], 10);
-    const year = parseInt(match[3], 10);
+    const day = parseInt(match[3], 10);
     
     // Check valid ranges
     if (month < 1 || month > 12) {
@@ -751,7 +758,7 @@ function cancelEdit(index) {
     // Reset input values to current data
     const expense = previewData[index];
     const date = new Date(expense.date);
-    const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+    const formattedDate = formatDateYYYYMMDD(date);
     
     row.querySelector('.date-input').value = formattedDate;
     row.querySelector('.vendor-input').value = expense.vendor || '';
