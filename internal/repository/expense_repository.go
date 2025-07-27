@@ -280,10 +280,12 @@ func (r *expenseRepository) GetMonthlyStats(startDate, endDate string) (map[stri
         monthlyArray = append(monthlyArray, monthData)
     }
     
-    // Sort by month
+    // Sort by month using a more robust approach
     for i := 0; i < len(monthlyArray)-1; i++ {
         for j := i + 1; j < len(monthlyArray); j++ {
-            if monthlyArray[i]["month"].(string) > monthlyArray[j]["month"].(string) {
+            month1, ok1 := monthlyArray[i]["month"].(string)
+            month2, ok2 := monthlyArray[j]["month"].(string)
+            if ok1 && ok2 && month1 > month2 {
                 monthlyArray[i], monthlyArray[j] = monthlyArray[j], monthlyArray[i]
             }
         }

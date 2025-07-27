@@ -652,10 +652,19 @@ async function loadMonthlyStats() {
     
     try {
         const response = await fetch(`/api/expenses/monthly-stats?start_date=${startDate}&end_date=${endDate}`);
-        const stats = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const responseText = await response.text();
+        console.log('Monthly stats response:', responseText);
+        
+        const stats = JSON.parse(responseText);
         displayMonthlyChart(stats);
     } catch (error) {
         console.error('Error loading monthly stats:', error);
+        console.error('Response might not be valid JSON');
     }
 }
 
