@@ -1138,3 +1138,22 @@ async function loadRuleCategoryOptions() {
         console.error('Error loading category options:', error);
     }
 }
+
+// Toggle Add Expense Form
+function toggleAddExpenseForm() {
+    const formContainer = document.getElementById('addExpenseFormContainer');
+    const header = document.querySelector('.collapsible-header');
+    const toggleIcon = document.querySelector('.toggle-icon');
+    
+    if (formContainer.style.display === 'none') {
+        // Expand
+        formContainer.style.display = 'block';
+        header.setAttribute('aria-expanded', 'true');
+        toggleIcon.classList.add('expanded');
+    } else {
+        // Collapse
+        formContainer.style.display = 'none';
+        header.setAttribute('aria-expanded', 'false');
+        toggleIcon.classList.remove('expanded');
+    }
+}

@@ -34,7 +34,11 @@
         </div>
         
         <div class="add-expense-section">
-            <h2>Add New Expense</h2>
+            <div class="collapsible-header" onclick="toggleAddExpenseForm()" aria-expanded="false" aria-controls="addExpenseFormContainer">
+                <h2>Add New Expense</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="addExpenseFormContainer" class="collapsible-content" style="display: none;">
             <form id="addExpenseForm" class="expense-form">
                 <div class="form-row">
                     <div class="form-group">
@@ -85,6 +89,7 @@
                 </div>
             </form>
             <div id="addExpenseStatus" class="form-status"></div>
+            </div>
         </div>
         
         <div class="import-section">

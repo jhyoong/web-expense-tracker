@@ -51,10 +51,48 @@ h1 {
 /* Add Expense Form Styles */
 .add-expense-section {
     margin-bottom: 30px;
-    padding: 20px;
     border: 1px solid #ddd;
     border-radius: 8px;
     background-color: #f9f9f9;
+}
+
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    cursor: pointer;
+    user-select: none;
+    background-color: #f9f9f9;
+    border-radius: 8px 8px 0 0;
+    transition: background-color 0.2s ease;
+}
+
+.collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.collapsible-header h2 {
+    margin: 0;
+    color: #333;
+}
+
+.toggle-icon {
+    font-size: 16px;
+    font-weight: bold;
+    color: #666;
+    transition: transform 0.3s ease;
+}
+
+.toggle-icon.expanded {
+    transform: rotate(-180deg);
+}
+
+.collapsible-content {
+    padding: 0 20px 20px 20px;
+    border-radius: 0 0 8px 8px;
+    background-color: #f9f9f9;
+    transition: all 0.3s ease;
 }
 
 .expense-form {
