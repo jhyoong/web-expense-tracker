@@ -11,8 +11,8 @@ type ExpenseRepository interface {
     Create(expense *models.Expense) error
     Update(id int, expense *models.Expense) error
     Delete(id int) error
-    GetStats(startDate, endDate string) (map[string]interface{}, error)
-    GetMonthlyStats(startDate, endDate string) (map[string]interface{}, error)
+    GetStats(startDate, endDate, category string) (map[string]interface{}, error)
+    GetMonthlyStats(startDate, endDate, category string) (map[string]interface{}, error)
     BulkInsert(expenses []models.Expense) ([]models.Expense, error)
 }
 
@@ -192,16 +192,25 @@ func (r *expenseRepository) Delete(id int) error {
     return nil
 }
 
-func (r *expenseRepository) GetStats(startDate, endDate string) (map[string]interface{}, error) {
+func (r *expenseRepository) GetStats(startDate, endDate, category string) (map[string]interface{}, error) {
     query := `
         SELECT category, SUM(amount) as total
         FROM expenses
         WHERE date BETWEEN ? AND ?
+    `
+    args := []interface{}{startDate, endDate}
+    
+    if category != "" {
+        query += " AND category = ?"
+        args = append(args, category)
+    }
+    
+    query += `
         GROUP BY category
         ORDER BY total DESC
     `
     
-    rows, err := r.db.Query(query, startDate, endDate)
+    rows, err := r.db.Query(query, args...)
     if err != nil {
         return nil, err
     }
@@ -227,16 +236,25 @@ func (r *expenseRepository) GetStats(startDate, endDate string) (map[string]inte
     return stats, nil
 }
 
-func (r *expenseRepository) GetMonthlyStats(startDate, endDate string) (map[string]interface{}, error) {
+func (r *expenseRepository) GetMonthlyStats(startDate, endDate, category string) (map[string]interface{}, error) {
     query := `
         SELECT strftime('%Y-%m', date) as month, category, SUM(amount) as total
         FROM expenses
         WHERE date BETWEEN ? AND ?
+    `
+    args := []interface{}{startDate, endDate}
+    
+    if category != "" {
+        query += " AND category = ?"
+        args = append(args, category)
+    }
+    
+    query += `
         GROUP BY strftime('%Y-%m', date), category
         ORDER BY month ASC, category ASC
     `
     
-    rows, err := r.db.Query(query, startDate, endDate)
+    rows, err := r.db.Query(query, args...)
     if err != nil {
         return nil, err
     }

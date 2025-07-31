@@ -376,9 +376,7 @@ async function loadExpenses(page = 1) {
             const selectedView = document.querySelector('input[name="chartView"]:checked').value;
             
             if (selectedView === 'category') {
-                const statsResponse = await fetch(`/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`);
-                const stats = await statsResponse.json();
-                displayChart(stats);
+                loadCategoryStats();
             } else if (selectedView === 'monthly') {
                 loadMonthlyStats();
             }
@@ -645,13 +643,18 @@ function displayChart(stats) {
 async function loadMonthlyStats() {
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
+    const category = document.getElementById('category').value;
     
     if (!startDate || !endDate) {
         return;
     }
     
     try {
-        const response = await fetch(`/api/expenses/monthly-stats?start_date=${startDate}&end_date=${endDate}`);
+        let url = `/api/expenses/monthly-stats?start_date=${startDate}&end_date=${endDate}`;
+        if (category) {
+            url += `&category=${encodeURIComponent(category)}`;
+        }
+        const response = await fetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -787,13 +790,18 @@ function setupChartViewToggle() {
 async function loadCategoryStats() {
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
+    const category = document.getElementById('category').value;
     
     if (!startDate || !endDate) {
         return;
     }
     
     try {
-        const response = await fetch(`/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`);
+        let url = `/api/expenses/stats?start_date=${startDate}&end_date=${endDate}`;
+        if (category) {
+            url += `&category=${encodeURIComponent(category)}`;
+        }
+        const response = await fetch(url);
         const stats = await response.json();
         displayChart(stats);
     } catch (error) {

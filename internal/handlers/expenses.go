@@ -76,8 +76,9 @@ func (h *Handler) GetExpenses(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
     startDate := r.URL.Query().Get("start_date")
     endDate := r.URL.Query().Get("end_date")
+    category := r.URL.Query().Get("category")
     
-    stats, err := h.expenseRepo.GetStats(startDate, endDate)
+    stats, err := h.expenseRepo.GetStats(startDate, endDate, category)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
@@ -90,8 +91,9 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetMonthlyStats(w http.ResponseWriter, r *http.Request) {
     startDate := r.URL.Query().Get("start_date")
     endDate := r.URL.Query().Get("end_date")
+    category := r.URL.Query().Get("category")
     
-    stats, err := h.expenseRepo.GetMonthlyStats(startDate, endDate)
+    stats, err := h.expenseRepo.GetMonthlyStats(startDate, endDate, category)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
