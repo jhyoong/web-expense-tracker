@@ -221,12 +221,23 @@ function displayPreview(result) {
     const previewTable = document.getElementById('previewTable');
     const tbody = previewTable.querySelector('tbody');
     
-    previewCount.textContent = `Found ${result.count} transactions`;
+    const duplicateText = result.duplicate_count > 0 ? 
+        ` (${result.duplicate_count} potential duplicates)` : '';
+    previewCount.textContent = `Found ${result.count} transactions${duplicateText}`;
     tbody.innerHTML = '';
     
     result.expenses.forEach((expense, index) => {
         const row = document.createElement('tr');
         row.setAttribute('data-index', index);
+        
+        // Get duplicate information
+        const duplicateInfo = result.duplicates && result.duplicates[index] ? result.duplicates[index] : null;
+        const isDuplicate = duplicateInfo && duplicateInfo.is_duplicate;
+        
+        // Add duplicate styling to the row
+        if (isDuplicate) {
+            row.classList.add('duplicate-row');
+        }
         
         const amount = expense.amount < 0 ? 
             `<span class="negative">-$${Math.abs(expense.amount).toFixed(2)}</span>` :
@@ -235,6 +246,20 @@ function displayPreview(result) {
         // Format date to YYYY/MM/DD
         const date = new Date(expense.date);
         const formattedDate = formatDateYYYYMMDD(date);
+        
+        // Create duplicate column content
+        let duplicateContent = '';
+        if (isDuplicate) {
+            const matchDate = duplicateInfo.matching_expense_date ? 
+                new Date(duplicateInfo.matching_expense_date).toLocaleDateString() : 'Unknown';
+            duplicateContent = `
+                <span class="duplicate-warning" title="Matches existing expense #${duplicateInfo.matching_expense_id} from ${matchDate}">
+                    ⚠️ Duplicate
+                </span>
+            `;
+        } else {
+            duplicateContent = '-';
+        }
             
         row.innerHTML = `
             <td class="date-cell">
@@ -268,10 +293,14 @@ function displayPreview(result) {
                 <span class="display-value">${expense.payment_method || 'CSV Import'}</span>
                 <input type="text" class="edit-input payment-method-input" value="${expense.payment_method || 'CSV Import'}" style="display: none;">
             </td>
+            <td class="duplicate-cell">
+                ${duplicateContent}
+            </td>
             <td class="actions-cell">
                 <button class="edit-btn" onclick="editRow(${index})">Edit</button>
                 <button class="save-btn" onclick="saveRow(${index})" style="display: none;">Save</button>
                 <button class="cancel-btn" onclick="cancelEdit(${index})" style="display: none;">Cancel</button>
+                ${isDuplicate ? '<br><label><input type="checkbox" class="skip-duplicate" data-index="' + index + '" checked> Skip</label>' : ''}
             </td>
         `;
         tbody.appendChild(row);
@@ -297,13 +326,26 @@ async function confirmImport() {
     uploadStatus.innerHTML = '<div class="loading">Saving transactions to database...</div>';
     
     try {
-        // Send the edited preview data to the backend
+        // Filter out skipped duplicates
+        const skipCheckboxes = document.querySelectorAll('.skip-duplicate:checked');
+        const skipIndices = new Set(Array.from(skipCheckboxes).map(cb => parseInt(cb.dataset.index)));
+        
+        const filteredData = previewData.filter((expense, index) => !skipIndices.has(index));
+        
+        if (filteredData.length === 0) {
+            alert('No transactions to import after filtering out duplicates.');
+            confirmBtn.disabled = false;
+            uploadStatus.innerHTML = '';
+            return;
+        }
+        
+        // Send the filtered preview data to the backend
         const response = await apiRequest('/api/import/confirm', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(previewData)
+            body: JSON.stringify(filteredData)
         });
         
         const result = await response.json();

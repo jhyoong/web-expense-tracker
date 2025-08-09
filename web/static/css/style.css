@@ -642,3 +642,36 @@ tr:hover {
 .delete-btn:hover {
     background-color: #c82333;
 }
+
+/* Duplicate Detection Styles */
+.duplicate-row {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.duplicate-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #856404;
+    font-weight: bold;
+    font-size: 12px;
+    cursor: help;
+}
+
+.duplicate-warning:hover {
+    background-color: #ffeaa7;
+    border-radius: 3px;
+    padding: 2px 4px;
+}
+
+.skip-duplicate {
+    margin-right: 5px;
+}
+
+.actions-cell label {
+    font-size: 12px;
+    color: #666;
+    margin-top: 5px;
+    display: block;
+}

@@ -14,6 +14,7 @@ type ExpenseRepository interface {
     GetStats(startDate, endDate string) (map[string]interface{}, error)
     GetMonthlyStats(startDate, endDate string) (map[string]interface{}, error)
     BulkInsert(expenses []models.Expense) ([]models.Expense, error)
+    CheckForDuplicates(expenses []models.Expense) ([]DuplicateInfo, error)
 }
 
 type PaginationInfo struct {
@@ -22,6 +23,13 @@ type PaginationInfo struct {
     Limit       int  `json:"limit"`
     HasNext     bool `json:"has_next"`
     HasPrevious bool `json:"has_previous"`
+}
+
+type DuplicateInfo struct {
+    Index              int       `json:"index"`
+    IsDuplicate        bool      `json:"is_duplicate"`
+    MatchingExpenseID  *int      `json:"matching_expense_id,omitempty"`
+    MatchingExpenseDate *string  `json:"matching_expense_date,omitempty"`
 }
 
 type expenseRepository struct {
@@ -345,4 +353,52 @@ func (r *expenseRepository) BulkInsert(expenses []models.Expense) ([]models.Expe
     }
     
     return savedExpenses, nil
+}
+
+func (r *expenseRepository) CheckForDuplicates(expenses []models.Expense) ([]DuplicateInfo, error) {
+    if len(expenses) == 0 {
+        return []DuplicateInfo{}, nil
+    }
+    
+    duplicateInfos := make([]DuplicateInfo, len(expenses))
+    
+    // Initialize all as non-duplicates
+    for i := range duplicateInfos {
+        duplicateInfos[i] = DuplicateInfo{
+            Index:       i,
+            IsDuplicate: false,
+        }
+    }
+    
+    // Build the query to check for duplicates
+    // We'll check each expense individually for better control
+    query := `
+        SELECT id, date 
+        FROM expenses 
+        WHERE date = ? AND description = ? AND amount = ? AND payment_method = ?
+        LIMIT 1
+    `
+    
+    for i, expense := range expenses {
+        var matchingID int
+        var matchingDateStr string
+        
+        err := r.db.QueryRow(query, 
+            expense.Date, 
+            expense.Description, 
+            expense.Amount, 
+            expense.PaymentMethod,
+        ).Scan(&matchingID, &matchingDateStr)
+        
+        if err == nil {
+            // Found a duplicate
+            duplicateInfos[i].IsDuplicate = true
+            duplicateInfos[i].MatchingExpenseID = &matchingID
+            duplicateInfos[i].MatchingExpenseDate = &matchingDateStr
+        }
+        // If err == sql.ErrNoRows, that means no duplicate found, which is expected
+        // Any other error would be a database error, but we'll continue processing other expenses
+    }
+    
+    return duplicateInfos, nil
 }
