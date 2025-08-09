@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"expense-tracker/internal/models"
+	"expense-tracker/internal/repository"
 	"fmt"
 	"io"
 	"log"
@@ -65,14 +66,38 @@ func (h *Handler) ImportFromCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// Check for duplicates
+	duplicateInfos, err := h.expenseRepo.CheckForDuplicates(expenses)
+	if err != nil {
+		log.Printf("ImportFromCSV: Failed to check duplicates: %v", err)
+		// Continue without duplicate info rather than failing the import
+		duplicateInfos = make([]repository.DuplicateInfo, len(expenses))
+		for i := range duplicateInfos {
+			duplicateInfos[i] = repository.DuplicateInfo{
+				Index:       i,
+				IsDuplicate: false,
+			}
+		}
+	}
+	
+	// Count duplicates for summary
+	duplicateCount := 0
+	for _, info := range duplicateInfos {
+		if info.IsDuplicate {
+			duplicateCount++
+		}
+	}
+	
 	// Return parsed expenses for preview
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
-		"success":  true,
-		"expenses": expenses,
-		"count":    len(expenses),
-		"filename": header.Filename,
-		"message":  fmt.Sprintf("Successfully parsed %d transactions", len(expenses)),
+		"success":        true,
+		"expenses":       expenses,
+		"duplicates":     duplicateInfos,
+		"count":          len(expenses),
+		"duplicate_count": duplicateCount,
+		"filename":       header.Filename,
+		"message":        fmt.Sprintf("Successfully parsed %d transactions (%d potential duplicates found)", len(expenses), duplicateCount),
 	}
 	
 	if err := json.NewEncoder(w).Encode(response); err != nil {
